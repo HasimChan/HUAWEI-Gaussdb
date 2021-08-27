@@ -47,13 +47,14 @@ public class Gaussdb {
                     insert(sqlParser.getTableName()[0], contents);
                     break;
                 case SELECT:
-                    ArrayList<Map<String, String[]>> conditionMapList = sqlParser.selectParse(subSql);
+                    Map<String, Map<String, String[]>> conditionMapList = sqlParser.selectParse(subSql);
                     switch (sqlParser.getSqlType()) {
                         case SINGLE_TABLE_SELECT_ALL:
                             selectAll(sqlParser.getTableName()[0]);
                             break;
                         case SINGLE_TABLE_SELECT:
-//                            singleTableSelect(sqlParser.getTableName()[0], conditionMapList.get(0));
+                            String tableName = sqlParser.getTableName()[0];
+                            singleTableSelect(tableName, conditionMapList.get(tableName));
                             break;
                         case TWO_TABLE_SELECT:
                             break;
@@ -550,12 +551,13 @@ class SqlParser {
         String[] temp = subSql.split("\\s+");
         tableName = new String[]{temp[1]}; //获取表名
 
+        // 此处截取为最后一个右括号，并且解决了逗号问题
         String[] contents = subSql.substring(subSql.indexOf("(") + 1, subSql.lastIndexOf(")")).split(",(?=(?:[^\']*\'[^\']*\')*[^\']*$)", -1); // 获取插入内容
         System.out.println("[INFO] will be inserted content: " + Arrays.toString(arrayTrim(contents)));
         return arrayTrim(contents);
     }
 
-    public ArrayList<Map<String, String[]>> selectParse(String subSql) {
+    public Map<String, Map<String, String[]>> selectParse(String subSql) {
         subSql = subSql.trim();
 
         if (subSql.charAt(0) == '*') { // 查询所有
@@ -565,7 +567,9 @@ class SqlParser {
             System.out.println("[INFO] select all from: " + tableName[0]);
             return null;
         } else {
-            ArrayList<Map<String, String[]>> conditionMapList = new ArrayList<>();
+            // 考虑text存在等号与不等号的情况和关键字的情况，关键字分割单靠加空格不行
+            // Map  集合名称-等值条件
+            HashMap<String, Map<String, String[]>> conditionMapList = new HashMap<>();
             String[] contents = splitIgnoreCase(subSql, "from");
             if (contents.length == 0)
                 throw new RuntimeException("SQL syntax error");
@@ -583,7 +587,9 @@ class SqlParser {
                 sqlType = SqlType.SINGLE_TABLE_SELECT;
                 Map<String, String[]> conditionMap = singleSelectConditionParse(selectConditionStr);
                 conditionMap.put("targetFields", arrayTrim(targetFieldsStr.split(",")));
-                conditionMapList.add(conditionMap);
+                conditionMapList.put(tableName[0], conditionMap);
+                System.out.println("[INFO] single table select from Table: " + tableName[0]);
+                System.out.println("[INFO] target fields are: " + Arrays.toString(arrayTrim(targetFieldsStr.split(","))));
                 return conditionMapList;
             } else {  // 两表查询
 
@@ -612,8 +618,10 @@ class SqlParser {
         for (String content : contents) {
             String[] andContents = splitIgnoreCase(content, "and");
             if (andContents.length == 1) { // 没有and
-                if (andContents[0].indexOf("!=") == -1) { // 等于
-                    String[] kv = arrayTrim(andContents[0].split("="));
+                String[] split = andContents[0].split("!=(?=(?:[^\']*\'[^\']*\')*[^\']*$)", -1);
+                System.out.println(Arrays.toString(split));
+                if (split.length == 1) { // 等于
+                    String[] kv = arrayTrim(andContents[0].split("=(?=(?:[^\']*\'[^\']*\')*[^\']*$)", -1));
                     orEqualsKey.add(fieldParse(kv[0]));
                     orEqualsVal.add(kv[1]);
                 } else { // 不等于
@@ -657,17 +665,16 @@ class SqlParser {
 
     private String[] splitIgnoreCase(String str, String target) {
         target = target.toLowerCase();
-        int index = str.indexOf(" " + target + " ");
-        if (index == -1) {
+        String[] split = str.split(" " + target + " (?=(?:[^\']*\'[^\']*\')*[^\']*$)", -1);
+        if (split.length == 1) {
             target = target.toUpperCase();
-            index = str.indexOf(" " + target + " ");
-            if (index == -1)
-                return new String[]{str};
-            else
-                return str.split(" " + target + " ");
+            split = str.split(" " + target + " (?=(?:[^\']*\'[^\']*\')*[^\']*$)", -1);
+            if (split.length != -1)
+                return split;
         } else {
-            return str.split(" " + target + " ");
+            return split;
         }
+        return null;
     }
 
     private String[] arrayTrim(String[] array) {

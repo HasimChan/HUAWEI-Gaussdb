@@ -17,4 +17,12 @@ create index t1idx on student (id);
 select *
 from student;
 
+select  id, name  from  student  where   student.id = 2  or  id != 2  and  id != 18;
 
+select  id, name  from  student  where   student.name != ' !=where I go to'  or  id != 2  and  id != 18;
+
+select  id, name  from  student  where   student.name = ' from I go to'  or  id != 2  and  id != 18;
+
+select  id, name  from  student  where   student.name = ' or I go to'  or  id != 2  and  id != 18;
+
+select  id, name  from  student  where   student.name = ' and I go to'  or  id != 2  and  id != 18;
